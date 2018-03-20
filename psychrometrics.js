@@ -9,14 +9,13 @@ function satPressFromTempIp(temp) {
     var t = temp + 459.67;
     var lnOfSatPress = c8/t + c9 + c10*t + c11*Math.pow(t,2) + c12*Math.pow(t,3) + c13*Math.log(t);
     var satPress = Math.exp(lnOfSatPress)
-    // Truncate the top of the chart.
     return satPress;
 }
 
 var totalPressure = 14.696; //psia.
 
 function satHumidRatioFromTempIp(temp) {
-    var satPress = satHumidRatioFromTempIp(temp);
+    var satPress = satPressFromTempIp(temp);
     return 0.621945*satPress/(totalPressure - satPress);
 }
 
@@ -29,15 +28,15 @@ function pvFromw(w) {
 }
 
 const maxPv = 0.6;
-const tempMin = 32;
-const tempMax = 115;
+const minTemp = 32;
+const maxTemp = 115;
 
 temps = [];
-for (i = tempMin; i <= tempMax; i = i + 0.5) {
+for (i = minTemp; i <= maxTemp; i = i + 0.5) {
     temps.push(i);
 }
 
-var pixelWidth = 1200;
+var pixelWidth = 1300;
 var pixelHeight = 700;
 
 var xOffsetPercent = 10;
@@ -96,7 +95,7 @@ svg.append("g").attr("id","yAxis").attr("transform", "translate(" + xScale(120) 
 svg.append("g").attr("id","yAxisHumid").attr("transform", "translate(" + xScale(115) + ",0)").call(yAxisHumid);
 
 var constantTemps = [];
-for (i = tempMin; i <= tempMax ; i++) {
+for (i = minTemp; i <= maxTemp ; i++) {
     constantTemps.push(i);
 }
 
@@ -132,7 +131,7 @@ for (i = 10; i < 100 ; i = i+10) {
 }
 
 var constRHLines = constantRHvalues.map( (rhValue) => 
-    temps
+    temps.filter((temp) => (satPressFromTempIp(temp)*rhValue / 100 ) < maxPv)
     .map( (temp) => ({ x: temp, y: satPressFromTempIp(temp) * rhValue / 100}))
     //.filter((data)=>data.y<maxPv)
 );
@@ -151,39 +150,64 @@ function thinLine() {
     d3.select(this).attr("stroke-width","1");
 }
 
-svg.append("text").attr("x",xScale(75)).attr("y",yScale(0.05)).text("10 %");
+svg.append("text").attr("x",xScale(75)).attr("y",yScale(0.05)).text("10%");
 
-//temps.map( (temp) => {
-    //svg.append("path").attr("d", 
-//});
+var constEnthalpyValues = [];
+for (i = 12; i < 50 ; i++) {
+   constEnthalpyValues.push(i);
+}
 
-//
-            //svg
-        //.append("circle")
-        //.attr("r", 20)
-        //.attr("cx",20)
-        //.attr("cy",20)
-        //.style("fill","red");
-//svg
-    //.append("text")
-    //.attr("id", "a")
-    //.attr("x",20)
-    //.attr("y",20)
-    //.style("opacity", 0)
-    //.text("HELLO WORLD");
-//svg
-    //.append("circle")
-    //.attr("r", 100)
-    //.attr("cx",400)
-    //.attr("cy",400)
-    //.style("fill","lightblue");
-//svg
-//.append("text")
-//.attr("id", "b")
-//.attr("x",400)
-//.attr("y",400)
-//.style("opacity", 0)
-//.text("Uh, hi."); 
-//d3.select("#a").transition().duration(2000).delay(1000).style("opacity", 1);
-//d3.select("#b").transition().delay(3000).style("opacity", .75); 
+function humidityRatioFromEnthalpyTemp(enthalpy, temp) {
+    return (enthalpy - 0.24*temp) / (1061+0.444*temp);
+}
+
+function satTempAtEnthalpy(enthalpy) {
+    var currentLowTemp = 0;
+    var currentHighTemp = maxTemp;
+
+    var error = 1;
+    var testTemp = (currentLowTemp + currentHighTemp) / 2;
+
+    do {
+        testTemp = (currentLowTemp + currentHighTemp) / 2;
+        var testSatHumidityRatio = satHumidRatioFromTempIp(testTemp);
+        var testHumidityRatio = humidityRatioFromEnthalpyTemp(enthalpy, testTemp);
+
+        error = testSatHumidityRatio - testHumidityRatio;
+        if (testSatHumidityRatio > testHumidityRatio ) currentHighTemp = testTemp;
+        else currentLowTemp = testTemp;
+    }
+    while (Math.abs(error) > 0.0000005)
+
+    return testTemp;
+}
+
+constEnthalpyLines = constEnthalpyValues.map(
+    (enthalpyValue) => {
+        var lowTemp = satTempAtEnthalpy(enthalpyValue);
+
+        var lowTempDataPoint = {
+            x: lowTemp,
+            y: satPressFromTempIp(lowTemp)
+        }
+
+        var highTemp = enthalpyValue / 0.24;
+        if (highTemp > maxTemp) {
+            highTemp = maxTemp
+        }
+
+        var highTempDataPoint = {
+            x: highTemp,
+            y: pvFromw(humidityRatioFromEnthalpyTemp(enthalpyValue, highTemp) )
+        }
+
+        return [lowTempDataPoint, highTempDataPoint];
+    });
+
+constEnthalpyLines.map( (enthalpyLine) => svg.append("path").attr("d", saturationLine(enthalpyLine))   
+    .attr("class","enthalpy")
+        .attr("fill","none")
+        .attr("stroke", "green")
+        .attr("stroke-width", 0.5));
+
 
