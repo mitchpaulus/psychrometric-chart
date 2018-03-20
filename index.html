@@ -5,12 +5,22 @@
         <meta charset="utf-8">
         <title>Psychrometric Page</title>
         <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js"></script>
     </head>
 
     <body>
-        <div id="vizcontainer">
-            <svg style="width:500px;height:500px;border:1px lightgray solid;" />
+
+        <div style="grid">
+            <div id="vizcontainer">
+                <svg style="border:1px lightgray solid;" />
+            </div>
+
+            <div>
+                <label><input data-bind="textInput: state[0].temperature" type="text">Temperature</label>
+            </div>
+
         </div>
+
         <script src="psychrometrics.js"></script>
     </body>
 </html>

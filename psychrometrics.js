@@ -59,6 +59,7 @@ function boundaryLine(element) {
     .attr("stroke","#000000")
     .attr("stroke-width",2);
 }
+
 var svg = d3.select("svg")
 
 svg.style("width", pixelWidth + "px") ;
@@ -153,7 +154,7 @@ function thinLine() {
 svg.append("text").attr("x",xScale(75)).attr("y",yScale(0.05)).text("10%");
 
 var constEnthalpyValues = [];
-for (i = 12; i < 50 ; i++) {
+for (i = 8; i < 50 ; i++) {
    constEnthalpyValues.push(i);
 }
 
@@ -182,13 +183,24 @@ function satTempAtEnthalpy(enthalpy) {
     return testTemp;
 }
 
+
 constEnthalpyLines = constEnthalpyValues.map(
     (enthalpyValue) => {
         var lowTemp = satTempAtEnthalpy(enthalpyValue);
 
-        var lowTempDataPoint = {
-            x: lowTemp,
-            y: satPressFromTempIp(lowTemp)
+        var lowTempDataPoint;
+        if (lowTemp < minTemp) {
+            lowTemp = minTemp;
+            lowTempDataPoint = {
+                x: lowTemp,
+                y: pvFromw(humidityRatioFromEnthalpyTemp(enthalpyValue, lowTemp))  
+            }
+        }
+        else {
+            var lowTempDataPoint = {
+                x: lowTemp,
+                y: satPressFromTempIp(lowTemp)
+            }
         }
 
         var highTemp = enthalpyValue / 0.24;
@@ -211,3 +223,27 @@ constEnthalpyLines.map( (enthalpyLine) => svg.append("path").attr("d", saturatio
         .attr("stroke-width", 0.5));
 
 
+function viewModel() {
+    var self = this;
+
+    self.state = [{
+        temperature:  ko.observable(80),
+        pv:  ko.observable(0.1),
+    } 
+    ]
+
+    self.state[0].temperature.subscribe( () =>  d3.select("#states").selectAll("circle").attr("cx", d => xScale(d.temperature())).attr("cy", d=> yScale(  d.pv()) )  );
+
+    //self.temperature = ko.observable(50);
+    //self.pv = ko.observable(0.1);
+}
+
+var viewModel = new viewModel(); 
+
+ko.applyBindings(viewModel);
+
+svg.append("g").attr("id","states");
+
+var states = d3.select("#states").selectAll("circle");
+
+states.data(viewModel.state).enter().append("circle").attr("cx", d => xScale(d.temperature())).attr("cy", d=> yScale(  d.pv()) ).style("fill","red").attr("r","10");
