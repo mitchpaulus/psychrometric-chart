@@ -1,3 +1,8 @@
-.constantTempLine:hover {
-    
+.constantTemp:hover {
+    stroke-width: 1;
+    pointer-events: all;
+}
+.rh-ticks {
+    font-size: 12px;
+    background: white;
 }

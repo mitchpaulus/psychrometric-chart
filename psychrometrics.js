@@ -5,6 +5,7 @@ const c11 =  1.2890360e-5
 const c12 = -2.4780681e-9
 const c13 =  6.5459673
 
+// Saturation pressure in psi from temp in °F.
 function satPressFromTempIp(temp) {
     var t = temp + 459.67;
     var lnOfSatPress = c8/t + c9 + c10*t + c11*Math.pow(t,2) + c12*Math.pow(t,3) + c13*Math.log(t);
@@ -24,7 +25,12 @@ function wFromPv(pv) {
 }
 
 function pvFromw(w) {
+    if (typeof w === "string") w = parseFloat(w);
     return totalPressure / (1+ (0.621945/w)  );
+}
+
+function pvFromTempRh(temp, rh) {
+    return rh * satPressFromTempIp(temp);
 }
 
 const maxPv = 0.6;
@@ -106,6 +112,7 @@ var constantTempLines = constantTemps.map( (temp) => {
 
 constantTempLines.map((constantTempLine) => {
     svg.append("path")
+        .attr("class", "constantTemp")
         .attr("d", saturationLine(constantTempLine))
         .attr("fill","none")
         .attr("stroke", "#000000")
@@ -127,7 +134,7 @@ constantHumidityLines.map( (humidityRatioLine) =>
 
 
 var constantRHvalues = [];
-for (i = 10; i < 100 ; i = i+10) {
+for (i = 10; i < 100; i = i+10) {
     constantRHvalues.push(i);
 }
 
@@ -137,11 +144,31 @@ var constRHLines = constantRHvalues.map( (rhValue) =>
     //.filter((data)=>data.y<maxPv)
 );
 
-constRHLines.map( (rhLine) => {  
+constRHLines.map( (rhLine, i) => {  
     svg.append("path").attr("d", saturationLine(rhLine))
         .attr("fill","none")
         .attr("stroke", "red")
         .attr("stroke-width", 0.5);
+
+    temperature = 93 - i * 2
+
+    xLocation = xScale(temperature);
+
+
+    rh = i * 10 + 10
+    pv = pvFromTempRh(temperature, rh/100)
+    yLocation = yScale(pv + 0.01);
+
+    rotationDegrees = -i * 5;
+
+    transformText = "rotate(" + rotationDegrees + "," + xLocation + "," + yLocation + ")";
+
+    svg.append("text")
+        .attr("x",xLocation)
+        .attr("y",yLocation)
+        .attr("class","rh-ticks")
+        .attr("transform", transformText)
+        .text((i * 10 + 10) + "%");
 });
 
 function thickenLine() {
@@ -150,8 +177,6 @@ function thickenLine() {
 function thinLine() {
     d3.select(this).attr("stroke-width","1");
 }
-
-svg.append("text").attr("x",xScale(75)).attr("y",yScale(0.05)).text("10%");
 
 var constEnthalpyValues = [];
 for (i = 8; i < 50 ; i++) {
@@ -223,16 +248,22 @@ constEnthalpyLines.map( (enthalpyLine) => svg.append("path").attr("d", saturatio
         .attr("stroke-width", 0.5));
 
 
+function stateTempω() {
+    var self = this;
+
+    self.temperature  =  ko.observable(80);
+    self.humidityRatio = ko.observable(0.009);
+    self.pv = ko.computed(() => pvFromw(self.humidityRatio()));
+}
+
+
 function viewModel() {
     var self = this;
 
-    self.state = [{
-        temperature:  ko.observable(80),
-        pv:  ko.observable(0.1),
-    } 
-    ]
-
-    self.state[0].temperature.subscribe( () =>  d3.select("#states").selectAll("circle").attr("cx", d => xScale(d.temperature())).attr("cy", d=> yScale(  d.pv()) )  );
+    self.state = [ new stateTempω() ]
+    updateGraph = () =>  d3.select("#states").selectAll("circle").attr("cx", d => xScale(d.temperature())).attr("cy", d=> yScale(d.pv()))  
+    self.state[0].temperature.subscribe(updateGraph);
+    self.state[0].humidityRatio.subscribe(updateGraph);
 
     //self.temperature = ko.observable(50);
     //self.pv = ko.observable(0.1);
