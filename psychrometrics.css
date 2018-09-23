@@ -2,7 +2,17 @@
     stroke-width: 1;
     pointer-events: all;
 }
-.rh-ticks {
-    font-size: 12px;
+.ticks {
+    font-size: 10px;
+    font-family: sans-serif;
     background: white;
+}
+
+.state-label {
+    display: inline-block;
+    width: 15em;
+}
+
+#vizcontainer {
+
 }
