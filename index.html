@@ -4,9 +4,6 @@
     <head>
         <meta charset="utf-8">
         <title>Psychrometric Page</title>
-        <script src="https://d3js.org/d3.v4.min.js"></script>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js"></script>
-        <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
         <link rel="stylesheet" href="psychrometrics.css" type="text/css" charset="utf-8">
     </head>
 
@@ -18,28 +15,37 @@
             </div>
 
             <div style="grid-column: 2 /3"  >
+                <div>
+                    <div><label><input type="checkbox" data-bind="checked: showEnthalpyLines">Show enthalpy lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showvLines">Show specific volume lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showω">Show ω lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showTemp">Show dry bulb lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showWetBulb">Show wet bulb lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showRh">Show Rh lines? </label></div>
+                    <div><label><input type="number" data-bind="textInput: maxTempInput">Max dry bulb temp</label></div>
+                </div>
                 <div data-bind="foreach: states">
                     <div>
-                        <label><span class="state-label"> Temperature </span><input data-bind="textInput: temperature" type="text"></label>
+                        <label><span class="state-label"> Temperature </span><input data-bind="textInput: temperature" type="number"></label>
                     </div> 
                     <div style="margin-bottom:10px">
-                        <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: humidityRatio" type="text"></label>
+                        <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: humidityRatio" type="number" step="0.001"></label>
                     </div>
-
-                    <!--<label><input data-bind="textInput: state[0].temperature" type="text">Temperature</label>-->
-                    <!--<label><input data-bind="textInput: state[0].humidityRatio" type="text">Humidity Ratio</label>-->
+                    <div>
+                        <button data-bind="click: $root.removeState">Remove State</button>
+                    </div>
                 </div>
                 <div>
                     <button data-bind="click: addState">Add new state</button>
-                </div>
-                <div>
-                    <label><input type="checkbox" data-bind="checked: showEnthalpyLines">Show enthalpy lines? </label>
                 </div>
 
             </div>
 
         </div>
 
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js"></script>
+        <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
         <script src="psychrometrics.js"></script>
     </body>
 </html>

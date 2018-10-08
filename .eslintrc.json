@@ -1,0 +1,15 @@
+{
+    "rules": {
+        "semi": ["warn", "always"],
+        "quotes": ["warn", "double"],
+        "space-before-function-paren": ["warn", {
+            "anonymous": "always",
+            "named": "never",
+            "asyncArrow": "always"
+        }],
+        "spaced-comment": "off",
+        "indent": ["warn", 4]
+
+    },
+    "extends": "standard"
+}
