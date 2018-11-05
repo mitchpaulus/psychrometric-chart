@@ -2,6 +2,7 @@
     stroke-width: 1;
     pointer-events: all;
 }
+
 .ticks {
     font-size: 10px;
     font-family: sans-serif;
@@ -15,4 +16,9 @@
 
 #vizcontainer {
 
+}
+
+.states {
+    padding-top: 0.5em;
+    padding-bottom: 0.5em;
 }

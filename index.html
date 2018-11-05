@@ -7,11 +7,11 @@
         <link rel="stylesheet" href="psychrometrics.css" type="text/css" charset="utf-8">
     </head>
 
-    <body>
+    <body style="font-family: 'Fira Sans', sans-serif">
 
         <div style="display: grid; grid-template-columns: 1400px 1fr ">
             <div id="vizcontainer" style="grid-column: 1 / 2">
-                <svg style="border:1px lightgray solid;" />
+                <svg id="chartsvg" style="border:1px lightgray solid;" />
             </div>
 
             <div style="grid-column: 2 /3"  >
@@ -23,13 +23,17 @@
                     <div><label><input type="checkbox" data-bind="checked: showWetBulb">Show wet bulb lines? </label></div>
                     <div><label><input type="checkbox" data-bind="checked: showRh">Show Rh lines? </label></div>
                     <div><label><input type="number" data-bind="textInput: maxTempInput">Max dry bulb temp</label></div>
+                    <div><label><input type="number" step="0.001" data-bind="textInput: maxω">Max ω</label></div>
                 </div>
-                <div data-bind="foreach: states">
+                <div class="states" data-bind="foreach: states">
                     <div>
                         <label><span class="state-label"> Temperature </span><input data-bind="textInput: temperature" type="number"></label>
                     </div> 
                     <div style="margin-bottom:10px">
                         <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: humidityRatio" type="number" step="0.001"></label>
+                    </div>
+                    <div>
+                        <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: name" type="text"></label>
                     </div>
                     <div>
                         <button data-bind="click: $root.removeState">Remove State</button>
@@ -39,11 +43,19 @@
                     <button data-bind="click: addState">Add new state</button>
                 </div>
 
-            </div>
 
+            </div>
+                <div>
+                    <a download="psy.svg" data-bind="attr: { href: blobUrl }">Download File</a>
+                </div>
+                <div>
+                    <a data-bind="click: savePng">Download PNG</a>
+                </div>
         </div>
 
         <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.4.1/jspdf.debug.js" integrity="sha384-THVO/sM0mFD9h7dfSndI6TS0PgAGavwKvB5hAxRRvc0o9cPLohB0wb/PTA7LdUHs" crossorigin="anonymous"></script>
+        <script src="savepng.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js"></script>
         <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
         <script src="psychrometrics.js"></script>
