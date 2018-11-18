@@ -1,4 +1,6 @@
 /* global ko, d3 */
+/* global Blob */
+/* global saveSvgAsPng */
 const c8 = -1.0440397e4;
 const c9 = -1.129465e1;
 const c10 = -2.7022355e-2;
@@ -67,46 +69,25 @@ function pvFromw(w, totalPressure) {
 
 // partial pressure of vapor from dry bulb temp (°F) and rh (0-1)
 function pvFromTempRh(temp, rh) {
+    if (rh < 0 || rh > 1) throw new Error("RH value must be between 0-1");
     return rh * satPressFromTempIp(temp);
 }
 
 function tempFromRhAndPv(rh, pv) {
     if (!rh || rh > 1) throw new Error("RH value must be between 0-1");
 
-    var psatMin = 0;
-    var psatMax = satPressFromTempIp(200);
-
-    if (pv < psatMin || pv > psatMax) {
-        throw new Error("pv must be within bounds of chart");
-    }
-
     var goalPsat = pv / rh;
 
-    var midTemp = (200 + minTemp) / 2;
-    var psatMid = satPressFromTempIp(midTemp);
-
-    var updatedMaxTemp = 200;
-    var updatedMinTemp = 0;
-
-    var iterations = 0;
-    while (Math.abs(psatMid - goalPsat) > 0.00001) {
-        if (iterations > 500) {
-            throw new Error(`Infinite loop in temp from Rh and Pv (rh=${rh}, pv=${pv}, diff=${Math.abs(psatMid - goalPsat)}.)`);
-        }
-        if (psatMid > goalPsat) {
-            updatedMaxTemp = midTemp;
-            midTemp = (updatedMinTemp + updatedMaxTemp) / 2;
-            psatMid = satPressFromTempIp(midTemp);
-            iterations++;
-        } else {
-            updatedMinTemp = midTemp;
-            midTemp = (updatedMinTemp + updatedMaxTemp) / 2;
-            psatMid = satPressFromTempIp(midTemp);
-            iterations++;
-        }
+    // Employ Newton-Raphson method.
+    function funcToZero(temp) {
+        return satPressFromTempIp(temp) - goalPsat;
     }
 
-    return midTemp;
+    var testTemp = 80;
+    while (Math.abs(funcToZero(testTemp)) > 0.00001) {
+        testTemp = testTemp - funcToZero(testTemp) / dPvdT(1, testTemp);
+    }
+    return testTemp;
 }
 
 function tempFromEnthalpyPv(h, pv, totalPressure) {
@@ -115,20 +96,27 @@ function tempFromEnthalpyPv(h, pv, totalPressure) {
 }
 
 function tempPvFromvRh(v, rh, totalPressure) {
-    var minpv = 0;
-    var maxpv = 1;
-    do {
-        var pv = (maxpv + minpv) / 2;
-        var testtemp = tempFromRhAndPv(rh, pv);
-        var testv = vFromTempω(testtemp, wFromPv(pv, totalPressure), totalPressure);
-        var diff = testv - v;
-        if (diff > 0) {
-            maxpv = pv;
-        } else {
-            minpv = pv;
-        }
-    } while (Math.abs(diff) > 0.0001);
-    return { temp: testtemp, pv: pv };
+    var rAir = 53.35; // Gas constant in units of ft-lbf / lbm - R
+
+    function funcToZero(temp) {
+        // The 144 is a conversion factor from psf to psi. The 469.67 is to go from F to R.
+        var term1 = satPressFromTempIp(temp) * rh;
+        var term2 = (totalPressure - rAir * (temp + 459.67) / (v * 144));
+        return term1 - term2;
+    }
+
+    function derivative(temp) {
+        return dPvdT(rh, temp) + rAir / (v * 144);
+    }
+
+    // Employ the Newton-Raphson method.
+    var testTemp = 80;
+    var error = 1;
+    while (error > 0.00001) {
+        testTemp = testTemp - funcToZero(testTemp) / derivative(testTemp);
+        error = Math.abs(funcToZero(testTemp));
+    }
+    return { temp: testTemp, pv: pvFromTempRh(testTemp, rh) };
 }
 
 function wetBulbFromTempω(temp, ω, totalPressure) {
@@ -188,12 +176,13 @@ function tempFromvω(v, ω, totalPressure) {
 }
 
 function ωFromTempv(temp, v, totalPressure) {
-    var numerator = (totalPressure * v) / (0.370486 * (temp + 459.67)) - 1;
+    var numerator = ((totalPressure * v) / (0.370486 * (temp + 459.67))) - 1;
     return numerator / 1.607858;
 }
 
 // Calculate derivative of pv vs. T
 function dPvdT(rh, temp) {
+    if (rh < 0 || rh > 1) throw Error("rh should be specified 0-1");
     var absTemp = temp + 459.67;
     var term1 =
         -c8 / (absTemp * absTemp) +
@@ -250,7 +239,10 @@ function satTempAtEnthalpy(enthalpy, totalPressure) {
     var error = 1;
     var testTemp = (currentLowTemp + currentHighTemp) / 2;
 
+    var iterations = 0;
     do {
+        iterations++;
+        if (iterations > 500) throw Error("Inifite loop in satTempAtEnthalpy");
         testTemp = (currentLowTemp + currentHighTemp) / 2;
         var testSatHumidityRatio = satHumidRatioFromTempIp(testTemp, totalPressure);
         var testHumidityRatio = humidityRatioFromEnthalpyTemp(
@@ -335,11 +327,11 @@ function ViewModel() {
         return 120;
     });
 
-    self.totalPressureInput = ko.observable("14.646").extend({ rateLimit: 500 });
+    self.totalPressureInput = ko.observable("14.696").extend({ rateLimit: 500 });
     self.totalPressure = ko.pureComputed(() => {
         var parsedValue = parseFloat(self.totalPressureInput());
         if (!isNaN(parsedValue) && parsedValue > 10 && parsedValue < 20) return parsedValue;
-        return 14.646;
+        return 14.696;
     });
 
     self.maxωInput = ko.observable("0.03").extend({ rateLimit: 500 });
@@ -572,33 +564,7 @@ function ViewModel() {
                 lowerTemp = minTemp;
                 upperTemp = tempFromvω(v, 0, self.totalPressure());
             } else if (v < vFromTempω(self.tempAtCutoff(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure())) {
-                // Will have to use trial and error solution.
-                var testMinTemp = 0;
-                var testMaxTemp = self.maxTemp();
-
-                var testTemp = (testMinTemp + testMaxTemp) / 2;
-
-                var ωsat = satHumidRatioFromTempIp(testTemp, self.totalPressure());
-                var testω = ωFromTempv(testTemp, v, self.totalPressure());
-
-                var iterations = 0;
-                while (Math.abs(ωsat - testω) > 0.000001 && iterations < 1000) {
-                    if (ωsat > testω) {
-                        testMaxTemp = testTemp;
-                    } else {
-                        testMinTemp = testTemp;
-                    }
-                    testTemp = (testMinTemp + testMaxTemp) / 2;
-
-                    ωsat = satHumidRatioFromTempIp(testTemp, self.totalPressure());
-                    testω = ωFromTempv(testTemp, v, self.totalPressure());
-                    iterations++;
-                }
-                if (iterations >= 1000) {
-                    console.log("Infinite loop in calculating v lines.");
-                }
-
-                lowerTemp = testTemp;
+                lowerTemp = tempPvFromvRh(v, 1, self.totalPressure()).temp;
                 upperTemp = Math.min(tempFromvω(v, 0, self.totalPressure()), self.maxTemp());
             } else {
                 lowerTemp = tempFromvω(v, wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure());
@@ -623,6 +589,7 @@ function ViewModel() {
         selection.exit().remove();
 
         var data = self.vLines().filter(d => d.v % 0.5 === 0 &&
+                                        d.labelLocation.temp > minTemp &&
                                         d.labelLocation.temp < self.maxTemp() &&
                                         d.labelLocation.pv < self.maxPv());
 
@@ -648,35 +615,42 @@ function ViewModel() {
             .attr("y", d => self.yScale()(d.labelLocation.pv))
             .attr("transform", "translate(-12, -12)");
         selection.exit().remove();
+
+        //selection = d3.select("#v-labels").selectAll("circle").data(data);
+        //selection.enter()
+        //.append("circle")
+        //.style("fill", "red")
+        //.attr("r", "2")
+        //.merge(selection)
+        //.attr("cx", d => self.xScale()(d.labelLocation.temp))
+        //.attr("cy", d => self.yScale()(d.labelLocation.pv))
+        //selection.exit().remove();
     });
 
     function tempAtStraightEnthalpyLine(enthalpy) {
-        var currentLowTemp = 0;
-        var currentHighTemp = self.maxTemp();
+        var rise = self.maxPv() - self.bottomLeftBorderPv();
+        var run = (self.upperLeftBorderTemp()) - minTemp;
 
         function straightLinePv(temp) {
-            var rise = self.maxPv() - self.bottomLeftBorderPv();
-            var run = (self.upperLeftBorderTemp()) - minTemp;
-
             return self.bottomLeftBorderPv() + (rise / run) * (temp - minTemp);
         }
 
-        var error = 1;
+        function funcToZero(temp) {
+            return straightLinePv(temp) - pvFromEnthalpyTemp(enthalpy, temp, self.totalPressure());
+        }
 
-        do {
-            var testTemp = (currentLowTemp + currentHighTemp) / 2;
-            var testPvOnStraightLine = straightLinePv(testTemp);
+        // This comes from maxima, a computer algebra system.
+        function derivative(temp) {
+            return (rise / run) - ((1807179 * (12000000 * temp - 50000000 * enthalpy) * self.totalPressure()) /
+              Math.pow(1807179 * temp + 50000000 * enthalpy + 32994182250, 2) -
+              (12000000 * self.totalPressure()) / (1807179 * temp + 50000000 * enthalpy +
+                                                     32994182250));
+        }
 
-            var testPv = pvFromEnthalpyTemp(enthalpy, testTemp, self.totalPressure());
-
-            error = testPvOnStraightLine - testPv;
-            if (testPvOnStraightLine > testPv) {
-                currentHighTemp = testTemp;
-            } else {
-                currentLowTemp = testTemp;
-            }
-        } while (Math.abs(error) > 0.0000005);
-
+        var testTemp = 80;
+        while (Math.abs(funcToZero(testTemp)) > 0.0001) {
+            testTemp = testTemp - funcToZero(testTemp) / derivative(testTemp);
+        }
         return testTemp;
     }
 
@@ -850,22 +824,24 @@ function ViewModel() {
     self.removeState = (state) => { self.states.remove(state); };
 
     var elementObservables = [
-        { obs: "showEnthalpyLines", id: "enthalpyLines" },
-        { obs: "showvLines", id: "vpaths" },
-        { obs: "showω", id: "specific-humidity-lines" },
-        { obs: "showTemp", id: "temp-lines" },
-        { obs: "showWetBulb", id: "wetbulb-lines" },
-        { obs: "showRh", id: "rh-lines" }
+        { obs: "showEnthalpyLines", ids: ["enthalpyLines"] },
+        { obs: "showvLines", ids: ["vpaths"] },
+        { obs: "showω", ids: ["specific-humidity-lines"] },
+        { obs: "showTemp", ids: ["temp-lines"] },
+        { obs: "showWetBulb", ids: ["wetbulb-lines", "wetbulb-labels"] },
+        { obs: "showRh", ids: ["rh-lines", "rh-ticks", "rh-label-background"] }
     ];
 
     elementObservables.map(o => {
         self[o.obs] = ko.observable(true);
         ko.computed(() => {
-            var element = document.getElementById(o.id);
-            if (element) {
-                element.style.visibility = self[o.obs]()
-                    ? "visible"
-                    : "hidden";
+            for (let i = 0; i < o.ids.length; i++) {
+                var element = document.getElementById(o.ids[i]);
+                if (element) {
+                    element.style.visibility = self[o.obs]()
+                        ? "visible"
+                        : "hidden";
+                }
             }
         });
     });
@@ -939,7 +915,7 @@ function ViewModel() {
     var pvAxisX = self.xScale()(pvAxisTemp + 5);
     var pvAxisY = self.yScale()(self.maxPv() / 2);
     svg.append("text")
-        .text("Pv / psia")
+        .text("Vapor Press. / psia")
         .attr("x", pvAxisX)
         .attr("y", pvAxisY)
         .attr("transform", `rotate(-90, ${pvAxisX}, ${pvAxisY})`);

@@ -1,0 +1,11 @@
+func1: enthalpy = 0.24*temp + (0.621945 * v / (totalPressure - v)) * (1061 + 0.444 * temp);
+
+func2: v = e + (f/g) * (t - h) ;
+
+func3: solve(func1, v);
+
+display2d:false;
+diff(func3, temp);
+
+
+
