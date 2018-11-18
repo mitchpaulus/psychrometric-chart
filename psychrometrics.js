@@ -1,5 +1,4 @@
 /* global ko, d3 */
-
 const c8 = -1.0440397e4;
 const c9 = -1.129465e1;
 const c10 = -2.7022355e-2;
@@ -7,7 +6,6 @@ const c11 = 1.289036e-5;
 const c12 = -2.4780681e-9;
 const c13 = 6.5459673;
 
-const totalPressure = 14.696; // psia.
 const minTemp = 32;
 
 function getRandomInt(min, max) {
@@ -32,7 +30,7 @@ function range(min, max, stepsize) {
         n = n + 1;
     }
 
-    toReturn.push(max)
+    toReturn.push(max);
     return toReturn;
 }
 
@@ -50,16 +48,18 @@ function satPressFromTempIp(temp) {
     return satPress;
 }
 
-function satHumidRatioFromTempIp(temp) {
+function satHumidRatioFromTempIp(temp, totalPressure) {
+    if (arguments.length !== 2) throw Error(`Not all parameters specified. temp: ${temp}; P: ${totalPressure}`);
     var satPress = satPressFromTempIp(temp);
     return (0.621945 * satPress) / (totalPressure - satPress);
 }
 
-function wFromPv(pv) {
+function wFromPv(pv, totalPressure) {
+    if (arguments.length !== 2) throw Error(`Not all parameters specified. pv: ${pv}; P: ${totalPressure}`);
     return (0.621945 * pv) / (totalPressure - pv);
 }
 
-function pvFromw(w) {
+function pvFromw(w, totalPressure) {
     if (typeof w === "string") w = parseFloat(w);
     if (w < 0.000001) return 0;
     return totalPressure / (1 + 0.621945 / w);
@@ -73,7 +73,7 @@ function pvFromTempRh(temp, rh) {
 function tempFromRhAndPv(rh, pv) {
     if (!rh || rh > 1) throw new Error("RH value must be between 0-1");
 
-    var psatMin = 0
+    var psatMin = 0;
     var psatMax = satPressFromTempIp(200);
 
     if (pv < psatMin || pv > psatMax) {
@@ -109,32 +109,32 @@ function tempFromRhAndPv(rh, pv) {
     return midTemp;
 }
 
-function tempFromEnthalpyPv(h, pv) {
-    var ω = wFromPv(pv);
+function tempFromEnthalpyPv(h, pv, totalPressure) {
+    var ω = wFromPv(pv, totalPressure);
     return (h - ω * 1061) / (0.24 + ω * 0.445);
 }
 
-function tempPvFromvRh(v, rh) {
+function tempPvFromvRh(v, rh, totalPressure) {
     var minpv = 0;
     var maxpv = 1;
     do {
         var pv = (maxpv + minpv) / 2;
         var testtemp = tempFromRhAndPv(rh, pv);
-        var testv = vFromTempω(testtemp, wFromPv(pv));
+        var testv = vFromTempω(testtemp, wFromPv(pv, totalPressure), totalPressure);
         var diff = testv - v;
         if (diff > 0) {
             maxpv = pv;
         } else {
             minpv = pv;
         }
-    } while (Math.abs(diff) > 0.0001)
+    } while (Math.abs(diff) > 0.0001);
     return { temp: testtemp, pv: pv };
 }
 
-function wetBulbFromTempω(temp, ω) {
-    // Function we'd like to 0.
+function wetBulbFromTempω(temp, ω, totalPressure) {
+    // Function we'd like to 0. A difference in ω's.
     function testWetbulbResult(testWetbulb) {
-        var satωAtWetBulb = satHumidRatioFromTempIp(testWetbulb);
+        var satωAtWetBulb = satHumidRatioFromTempIp(testWetbulb, totalPressure);
 
         return ((1093 - 0.556 * testWetbulb) * satωAtWetBulb - 0.24 * (temp - testWetbulb)) /
             (1093 + 0.444 * temp - testWetbulb) - ω;
@@ -169,30 +169,25 @@ function wetBulbFromTempω(temp, ω) {
     return testTemp;
 }
 
-function tempFromWetbulbω(wetBulb, ω) {
-    var ωsatWetBulb = satHumidRatioFromTempIp(wetBulb);
+function tempFromWetbulbω(wetBulb, ω, totalPressure) {
+    var ωsatWetBulb = satHumidRatioFromTempIp(wetBulb, totalPressure);
     return ((1093 - 0.556 * wetBulb) * ωsatWetBulb + 0.24 * wetBulb - ω * (1093 - wetBulb)) / (0.444 * ω + 0.24);
 }
 
-function tempFromWetbulbBottomBorder(wetbulbTemp) {
-    var ωsatWetBulb = satHumidRatioFromTempIp(wetbulbTemp);
-    return ((1093 - 0.556 * wetbulbTemp) * ωsatWetBulb + 0.24 * wetbulbTemp) / 0.24;
-}
-
-function ωFromWetbulbDryBulb(wetbulbTemp, temp) {
-    var ωsatWetBulb = satHumidRatioFromTempIp(wetbulbTemp);
+function ωFromWetbulbDryBulb(wetbulbTemp, temp, totalPressure) {
+    var ωsatWetBulb = satHumidRatioFromTempIp(wetbulbTemp, totalPressure);
     return ((1093 - 0.556 * wetbulbTemp) * ωsatWetBulb - 0.24 * (temp - wetbulbTemp)) / (1093 + 0.444 * temp - wetbulbTemp);
 }
 
-function vFromTempω(temp, ω) {
+function vFromTempω(temp, ω, totalPressure) {
     return 0.370486 * (temp + 459.67) * (1 + 1.607858 * ω) / totalPressure;
 }
 
-function tempFromvω(v, ω) {
+function tempFromvω(v, ω, totalPressure) {
     return (v * totalPressure) / (0.370486 * (1 + 1.607858 * ω)) - 459.67;
 }
 
-function ωFromTempv(temp, v) {
+function ωFromTempv(temp, v, totalPressure) {
     var numerator = (totalPressure * v) / (0.370486 * (temp + 459.67)) - 1;
     return numerator / 1.607858;
 }
@@ -221,8 +216,6 @@ var yCanvasRange = [
     (yOffsetPercent * pixelHeight) / 100
 ];
 
-
-
 function boundaryLine(element) {
     return element
         .attr("fill", "none")
@@ -237,21 +230,20 @@ svg.style("height", pixelHeight + "px");
 
 var humidityStep = 0.002;
 
-
 function humidityRatioFromEnthalpyTemp(enthalpy, temp) {
     return (enthalpy - 0.24 * temp) / (1061 + 0.445 * temp);
 }
 
-function enthalpyFromTempPv(temp, pv) {
-    var ω = wFromPv(pv);
+function enthalpyFromTempPv(temp, pv, totalPressure) {
+    var ω = wFromPv(pv, totalPressure);
     return 0.24 * temp + ω * (1061 + 0.445 * temp);
 }
 
-function pvFromEnthalpyTemp(enthalpy, temp) {
-    return pvFromw(humidityRatioFromEnthalpyTemp(enthalpy, temp));
+function pvFromEnthalpyTemp(enthalpy, temp, totalPressure) {
+    return pvFromw(humidityRatioFromEnthalpyTemp(enthalpy, temp), totalPressure);
 }
 
-function satTempAtEnthalpy(enthalpy) {
+function satTempAtEnthalpy(enthalpy, totalPressure) {
     var currentLowTemp = 0;
     var currentHighTemp = 200;
 
@@ -260,7 +252,7 @@ function satTempAtEnthalpy(enthalpy) {
 
     do {
         testTemp = (currentLowTemp + currentHighTemp) / 2;
-        var testSatHumidityRatio = satHumidRatioFromTempIp(testTemp);
+        var testSatHumidityRatio = satHumidRatioFromTempIp(testTemp, totalPressure);
         var testHumidityRatio = humidityRatioFromEnthalpyTemp(
             enthalpy,
             testTemp
@@ -291,14 +283,14 @@ for (let i = 10; i < 100; i = i + 10) {
     constantRHvalues.push(i);
 }
 
-function StateTempω(maxTemp, maxω, name) {
+function StateTempω(maxTemp, maxω, name, totalPressure) {
     var self = this;
 
     self.temperature = ko.observable(getRandomInt(minTemp, maxTemp));
-    var maxωrange = Math.min(satHumidRatioFromTempIp(self.temperature()), maxω);
+    var maxωrange = Math.min(satHumidRatioFromTempIp(self.temperature(), totalPressure), maxω);
 
     self.humidityRatio = ko.observable(Math.round(getRandomArbitrary(0, maxωrange) / 0.001) * 0.001);
-    self.pv = ko.computed(() => pvFromw(self.humidityRatio()));
+    self.pv = ko.computed(() => pvFromw(self.humidityRatio(), totalPressure));
     self.name = ko.observable(name);
 }
 
@@ -339,8 +331,22 @@ function ViewModel() {
     self.maxTempInput = ko.observable("120").extend({ rateLimit: 500 });
     self.maxTemp = ko.computed(() => {
         var parsedValue = parseInt(self.maxTempInput());
-        if (!isNaN(parsedValue) && parsedValue > minTemp) return parsedValue;
+        if (!isNaN(parsedValue) && parsedValue > minTemp && parsedValue < 180) return parsedValue;
         return 120;
+    });
+
+    self.totalPressureInput = ko.observable("14.646").extend({ rateLimit: 500 });
+    self.totalPressure = ko.pureComputed(() => {
+        var parsedValue = parseFloat(self.totalPressureInput());
+        if (!isNaN(parsedValue) && parsedValue > 10 && parsedValue < 20) return parsedValue;
+        return 14.646;
+    });
+
+    self.maxωInput = ko.observable("0.03").extend({ rateLimit: 500 });
+    self.maxω = ko.pureComputed(() => {
+        var parsedValue = parseFloat(self.maxωInput());
+        if (!isNaN(parsedValue) && parsedValue > 0 && parsedValue < 0.07) return parsedValue;
+        return 0.03;
     });
 
     self.xScale = ko.computed(() => {
@@ -352,17 +358,11 @@ function ViewModel() {
             ]);
     });
 
-    self.pixelsPerTemp = ko.pureComputed(() => {
-        return self.xScale()(1) - self.xScale()(0);
-    });
+    self.pixelsPerTemp = ko.pureComputed(() => self.xScale()(1) - self.xScale()(0));
+    self.pixelsPerPsia = ko.pureComputed(() => self.yScale()(1) - self.yScale()(0));
 
-    self.pixelsPerPsia = ko.pureComputed(() => {
-        return self.yScale()(1) - self.yScale()(0);
-    });
-
-    self.maxω = ko.observable(0.03).extend({ rateLimit: 500 });
     self.maxPv = ko.pureComputed(() => {
-        return pvFromw(self.maxω());
+        return pvFromw(self.maxω(), self.totalPressure());
     });
 
     self.yScale = ko.pureComputed(() => {
@@ -392,16 +392,13 @@ function ViewModel() {
         return satPressFromTempIp(minTemp) + 0.05 * self.maxPv();
     });
 
-    self.constantTemps = ko.pureComputed(() => {
-        return range(minTemp, self.maxTemp(), 1);
-    });
+    self.constantTemps = ko.pureComputed(() => range(minTemp, self.maxTemp(), 1));
 
     self.constantTempLines = ko.computed(() => {
         return self.constantTemps().map(temp => {
             return [{ x: temp, y: 0 }, { x: temp, y: satPressFromTempIp(temp) }];
         });
     });
-
 
     ko.computed(function () {
         var selection = d3.select("#temp-lines")
@@ -420,10 +417,9 @@ function ViewModel() {
         selection.exit().remove();
     });
 
-
     self.constantHumidities = ko.computed(() => {
         var constantHumidities = [];
-        for (let i = humidityStep; i < wFromPv(self.maxPv()); i = i + humidityStep) {
+        for (let i = humidityStep; i < wFromPv(self.maxPv(), self.totalPressure()); i = i + humidityStep) {
             constantHumidities.push(i);
         }
         return constantHumidities;
@@ -431,7 +427,7 @@ function ViewModel() {
 
     self.constantHumidityLines = ko.computed(() => {
         return self.constantHumidities().map(humidity => {
-            var pv = pvFromw(humidity);
+            var pv = pvFromw(humidity, self.totalPressure());
             return [
                 {
                     x: pv < satPressFromTempIp(minTemp) ? minTemp : tempFromRhAndPv(1, pv),
@@ -473,8 +469,8 @@ function ViewModel() {
         return d3
             .axisRight()
             .scale(self.yScale())
-            .tickValues(self.constantHumidities().map(pvFromw))
-            .tickFormat(d => wFromPv(d).toFixed(3));
+            .tickValues(self.constantHumidities().map(ω => pvFromw(ω, self.totalPressure())))
+            .tickFormat(d => wFromPv(d, self.totalPressure()).toFixed(3));
     });
 
     ko.computed(() => {
@@ -484,13 +480,8 @@ function ViewModel() {
     });
 
     // Want the temp diff to be 10% of total width, 9 labels.
-    var tempdiff = ko.pureComputed(() => {
-        return Math.round((self.maxTemp() - minTemp) * 0.15 / 9);
-    });
-
-    var starttemp = ko.pureComputed(() => {
-        return Math.round(minTemp + (self.maxTemp() - minTemp) * 0.6);
-    });
+    var tempdiff = ko.pureComputed(() => Math.round((self.maxTemp() - minTemp) * 0.15 / 9));
+    var starttemp = ko.pureComputed(() => Math.round(minTemp + (self.maxTemp() - minTemp) * 0.6));
 
     self.constRHLines = ko.computed(() => {
         return constantRHvalues.map((rhValue, i) => {
@@ -507,14 +498,14 @@ function ViewModel() {
             }
 
             var temp = starttemp() - i * tempdiff();
-            var pv = pvFromTempRh(temp, rhValue / 100)
+            var pv = pvFromTempRh(temp, rhValue / 100);
 
             //// Get derivative in psia/°F
             var derivative = dPvdT(rhValue / 100, temp);
             //// Need to get in same units, pixel/pixel
             var rotationDegrees =
                 (Math.atan(
-                    (derivative * (self.yScale()(1) - self.yScale()(0))) / (self.xScale()(1) - self.xScale()(0))
+                    (derivative * self.pixelsPerPsia()) / (self.pixelsPerTemp())
                 ) * 180) / Math.PI;
 
             return {
@@ -525,7 +516,7 @@ function ViewModel() {
                 rotationDegrees: rotationDegrees,
                 x: self.xScale()(temp),
                 y: self.yScale()(pv)
-            }
+            };
         });
     });
 
@@ -566,29 +557,29 @@ function ViewModel() {
             .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(0 -3)`);
     });
 
-    var minv = vFromTempω(minTemp, 0);
+    var minv = vFromTempω(minTemp, 0, self.totalPressure());
 
-    self.maxv = ko.computed(() => vFromTempω(self.maxTemp(), wFromPv(self.maxPv())));
+    self.maxv = ko.computed(() => vFromTempω(self.maxTemp(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure()));
     self.vValues = ko.computed(() => range(Math.ceil(minv / 0.1) * 0.1, Math.floor(self.maxv() / 0.1) * 0.1, 0.1));
 
     self.vLines = ko.computed(() => {
         return self.vValues().map(v => {
-            var mapFunction = temp => { return { x: temp, y: pvFromw(ωFromTempv(temp, v)) }; };
+            var mapFunction = temp => { return { x: temp, y: pvFromw(ωFromTempv(temp, v, self.totalPressure()), self.totalPressure()) }; };
             var lowerTemp;
             var upperTemp;
 
-            if (v < vFromTempω(minTemp, satHumidRatioFromTempIp(minTemp))) {
+            if (v < vFromTempω(minTemp, satHumidRatioFromTempIp(minTemp, self.totalPressure()), self.totalPressure())) {
                 lowerTemp = minTemp;
-                upperTemp = tempFromvω(v, 0);
-            } else if (v < vFromTempω(self.tempAtCutoff(), wFromPv(self.maxPv()))) {
+                upperTemp = tempFromvω(v, 0, self.totalPressure());
+            } else if (v < vFromTempω(self.tempAtCutoff(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure())) {
                 // Will have to use trial and error solution.
                 var testMinTemp = 0;
                 var testMaxTemp = self.maxTemp();
 
                 var testTemp = (testMinTemp + testMaxTemp) / 2;
 
-                var ωsat = satHumidRatioFromTempIp(testTemp);
-                var testω = ωFromTempv(testTemp, v);
+                var ωsat = satHumidRatioFromTempIp(testTemp, self.totalPressure());
+                var testω = ωFromTempv(testTemp, v, self.totalPressure());
 
                 var iterations = 0;
                 while (Math.abs(ωsat - testω) > 0.000001 && iterations < 1000) {
@@ -599,8 +590,8 @@ function ViewModel() {
                     }
                     testTemp = (testMinTemp + testMaxTemp) / 2;
 
-                    ωsat = satHumidRatioFromTempIp(testTemp);
-                    testω = ωFromTempv(testTemp, v);
+                    ωsat = satHumidRatioFromTempIp(testTemp, self.totalPressure());
+                    testω = ωFromTempv(testTemp, v, self.totalPressure());
                     iterations++;
                 }
                 if (iterations >= 1000) {
@@ -608,20 +599,20 @@ function ViewModel() {
                 }
 
                 lowerTemp = testTemp;
-                upperTemp = Math.min(tempFromvω(v, 0), self.maxTemp());
+                upperTemp = Math.min(tempFromvω(v, 0, self.totalPressure()), self.maxTemp());
             } else {
-                lowerTemp = tempFromvω(v, wFromPv(self.maxPv()));
-                upperTemp = Math.min(tempFromvω(v, 0), self.maxTemp());
+                lowerTemp = tempFromvω(v, wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure());
+                upperTemp = Math.min(tempFromvω(v, 0, self.totalPressure()), self.maxTemp());
             }
 
             var data = range(lowerTemp, upperTemp, 2).map(mapFunction);
-            var labelLocation = tempPvFromvRh(v, 0.35);
+            var labelLocation = tempPvFromvRh(v, 0.35, self.totalPressure());
             return { v: v, data: data, labelLocation: labelLocation };
         });
     });
 
     ko.computed(() => {
-        var selection = vPaths.selectAll("path").data(self.vLines())
+        var selection = vPaths.selectAll("path").data(self.vLines());
         selection.enter()
             .append("path")
             .attr("fill", "none")
@@ -631,8 +622,11 @@ function ViewModel() {
 
         selection.exit().remove();
 
-        var data = self.vLines().filter(d => d.v % 0.5 === 0);
-        selection = d3.select("#v-labels").selectAll("text").data(data)
+        var data = self.vLines().filter(d => d.v % 0.5 === 0 &&
+                                        d.labelLocation.temp < self.maxTemp() &&
+                                        d.labelLocation.pv < self.maxPv());
+
+        selection = d3.select("#v-labels").selectAll("text").data(data);
         selection.enter()
             .append("text")
             .attr("class", "ticks")
@@ -640,10 +634,10 @@ function ViewModel() {
             .text(d => d.v.toFixed(1))
             .merge(selection)
             .attr("x", d => self.xScale()(d.labelLocation.temp))
-            .attr("y", d => self.yScale()(d.labelLocation.pv))
+            .attr("y", d => self.yScale()(d.labelLocation.pv));
         selection.exit().remove();
 
-        selection = d3.select("#v-label-backgrounds").selectAll("rect").data(data)
+        selection = d3.select("#v-label-backgrounds").selectAll("rect").data(data);
         selection.enter()
             .append("rect")
             .attr("fill", "white")
@@ -652,7 +646,8 @@ function ViewModel() {
             .merge(selection)
             .attr("x", d => self.xScale()(d.labelLocation.temp))
             .attr("y", d => self.yScale()(d.labelLocation.pv))
-            .attr("transform", `translate(-12, -12)`);
+            .attr("transform", "translate(-12, -12)");
+        selection.exit().remove();
     });
 
     function tempAtStraightEnthalpyLine(enthalpy) {
@@ -672,8 +667,7 @@ function ViewModel() {
             var testTemp = (currentLowTemp + currentHighTemp) / 2;
             var testPvOnStraightLine = straightLinePv(testTemp);
 
-            //var testSatHumidityRatio = satHumidRatioFromTempIp(testTemp);
-            var testPv = pvFromEnthalpyTemp(enthalpy, testTemp);
+            var testPv = pvFromEnthalpyTemp(enthalpy, testTemp, self.totalPressure());
 
             error = testPvOnStraightLine - testPv;
             if (testPvOnStraightLine > testPv) {
@@ -686,37 +680,37 @@ function ViewModel() {
         return testTemp;
     }
 
-    var minEnthalpy = enthalpyFromTempPv(minTemp, 0);
+    self.minEnthalpy = ko.pureComputed(() => enthalpyFromTempPv(minTemp, 0, self.totalPressure()));
     self.maxEnthalpy = ko.computed(() => {
-        return enthalpyFromTempPv(self.maxTemp(), self.maxPv());
+        return enthalpyFromTempPv(self.maxTemp(), self.maxPv(), self.totalPressure());
     });
 
     self.constEnthalpyValues = ko.computed(() => {
-        return range(Math.ceil(minEnthalpy), Math.floor(self.maxEnthalpy()), 0.2);
+        return range(Math.ceil(self.minEnthalpy()), Math.floor(self.maxEnthalpy()), 0.2);
     });
 
     self.enthalpyValueToLine = enthalpyValue => {
-        var firstBoundaryEnthalpy = enthalpyFromTempPv(minTemp, satPressFromTempIp(minTemp) + 0.05 * self.maxPv());
-        var secondBoundaryEnthalpy = enthalpyFromTempPv(self.upperLeftBorderTemp(), self.maxPv());
+        var firstBoundaryEnthalpy = enthalpyFromTempPv(minTemp, satPressFromTempIp(minTemp) + 0.05 * self.maxPv(), self.totalPressure());
+        var secondBoundaryEnthalpy = enthalpyFromTempPv(self.upperLeftBorderTemp(), self.maxPv(), self.totalPressure());
 
         var maxEnthalpyTemp = Math.min(enthalpyValue / 0.24, self.maxTemp());
-        var mapFunction = temp => { return { x: temp, y: pvFromEnthalpyTemp(enthalpyValue, temp) }; };
+        var mapFunction = temp => { return { x: temp, y: pvFromEnthalpyTemp(enthalpyValue, temp, self.totalPressure()) }; };
         if (enthalpyValue < firstBoundaryEnthalpy) {
             if (enthalpyValue % 5 === 0) {
                 return { h: enthalpyValue, coords: range(minTemp, maxEnthalpyTemp, 0.25).map(mapFunction) };
             } else {
-                return { h: enthalpyValue, coords: range(minTemp, satTempAtEnthalpy(enthalpyValue), 0.25).map(mapFunction) };
+                return { h: enthalpyValue, coords: range(minTemp, satTempAtEnthalpy(enthalpyValue, self.totalPressure()), 0.25).map(mapFunction) };
             }
         } else if (enthalpyValue < secondBoundaryEnthalpy) {
             var tempAtBorder = tempAtStraightEnthalpyLine(enthalpyValue);
-            return { h: enthalpyValue, coords: range(tempAtBorder, enthalpyValue % 5 === 0 ? maxEnthalpyTemp : satTempAtEnthalpy(enthalpyValue), 0.25).map(mapFunction) };
+            return { h: enthalpyValue, coords: range(tempAtBorder, enthalpyValue % 5 === 0 ? maxEnthalpyTemp : satTempAtEnthalpy(enthalpyValue, self.totalPressure()), 0.25).map(mapFunction) };
         } else { // Top section
             return { h: enthalpyValue,
-                coords: range(tempFromEnthalpyPv(enthalpyValue, self.maxPv()),
-                    isMult(enthalpyValue, 5) ? maxEnthalpyTemp : satTempAtEnthalpy(enthalpyValue), 0.25).map(mapFunction)
+                coords: range(tempFromEnthalpyPv(enthalpyValue, self.maxPv(), self.totalPressure()),
+                    isMult(enthalpyValue, 5) ? maxEnthalpyTemp : satTempAtEnthalpy(enthalpyValue, self.totalPressure()), 0.25).map(mapFunction)
             };
         }
-    }
+    };
 
     self.constEnthalpyLines = ko.computed(() => self.constEnthalpyValues().map(self.enthalpyValueToLine));
 
@@ -743,8 +737,8 @@ function ViewModel() {
     ko.computed(() => {
         var data = self.constEnthalpyValues().filter(h =>
             h % 5 === 0 &&
-            h < enthalpyFromTempPv(self.upperLeftBorderTemp(), self.maxPv())
-        )
+            h < enthalpyFromTempPv(self.upperLeftBorderTemp(), self.maxPv(), self.totalPressure())
+        );
 
         var selection = hLabels.selectAll("text").data(data);
         selection
@@ -754,40 +748,40 @@ function ViewModel() {
             .text(d => d.toString())
             .merge(selection)
             .attr("x", h => self.xScale()(tempAtStraightEnthalpyLine(h) - 0.75))
-            .attr("y", h => self.yScale()(pvFromEnthalpyTemp(h, tempAtStraightEnthalpyLine(h)) + 0.005));
+            .attr("y", h => self.yScale()(pvFromEnthalpyTemp(h, tempAtStraightEnthalpyLine(h), self.totalPressure()) + 0.005));
         selection.exit().remove();
     });
 
-    var minWetBulb = wetBulbFromTempω(minTemp, 0);
-    self.maxWetBulb = ko.computed(() => wetBulbFromTempω(self.maxTemp(), wFromPv(self.maxPv())));
-    self.wetBulbBottomRight = ko.computed(() => wetBulbFromTempω(self.maxTemp(), 0));
+    var minWetBulb = wetBulbFromTempω(minTemp, 0, self.totalPressure());
+    self.maxWetBulb = ko.computed(() => wetBulbFromTempω(self.maxTemp(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure()));
+    self.wetBulbBottomRight = ko.computed(() => wetBulbFromTempω(self.maxTemp(), 0, self.totalPressure()));
     self.wetBulbValues = ko.computed(() => range(Math.ceil(minWetBulb), Math.floor(self.maxWetBulb()), 1));
 
     self.wetBulbLines = ko.computed(() => {
         return self.wetBulbValues().map((wetbulbTemp) => {
-            var mapFunction = temp => { return { y: pvFromw(ωFromWetbulbDryBulb(wetbulbTemp, temp)), x: temp }; };
+            var mapFunction = temp => { return { y: pvFromw(ωFromWetbulbDryBulb(wetbulbTemp, temp, self.totalPressure()), self.totalPressure()), x: temp }; };
 
             var lowerTemp;
             var upperTemp;
             if (wetbulbTemp < minTemp) {
                 lowerTemp = minTemp;
-                upperTemp = tempFromWetbulbBottomBorder(wetbulbTemp);
+                upperTemp = tempFromWetbulbω(wetbulbTemp, 0, self.totalPressure());
             } else if (wetbulbTemp < self.wetBulbBottomRight()) {
                 lowerTemp = wetbulbTemp;
-                upperTemp = tempFromWetbulbBottomBorder(wetbulbTemp);
+                upperTemp = tempFromWetbulbω(wetbulbTemp, 0, self.totalPressure());
             } else if (wetbulbTemp < self.tempAtCutoff()) {
                 lowerTemp = wetbulbTemp;
                 upperTemp = self.maxTemp();
             } else {
-                lowerTemp = tempFromWetbulbω(wetbulbTemp, wFromPv(self.maxPv()));
+                lowerTemp = tempFromWetbulbω(wetbulbTemp, wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure());
                 upperTemp = self.maxTemp();
             }
 
             var data = range(lowerTemp, upperTemp, 3).map(mapFunction);
             var midtemp = (upperTemp + lowerTemp) / 2;
-            var midpv = mapFunction(midtemp).y
+            var midpv = mapFunction(midtemp).y;
 
-            return { wetbulbTemp: wetbulbTemp, data: data, midtemp: midtemp, midpv: midpv }
+            return { wetbulbTemp: wetbulbTemp, data: data, midtemp: midtemp, midpv: midpv };
         });
     });
 
@@ -803,7 +797,7 @@ function ViewModel() {
         selection.exit().remove();
 
         var data = self.wetBulbLines().filter(d => d.wetbulbTemp % 5 === 0);
-        selection = d3.select("#wetbulb-labels").selectAll("text").data(data)
+        selection = d3.select("#wetbulb-labels").selectAll("text").data(data);
         selection.enter()
             .append("text")
             .attr("class", "ticks")
@@ -815,7 +809,6 @@ function ViewModel() {
         selection.exit().remove();
     });
 
-
     self.boundaryLineData = ko.computed(() => {
         return [
             { x: self.maxTemp(), y: 0 },
@@ -825,15 +818,13 @@ function ViewModel() {
             { x: tempFromRhAndPv(1, self.maxPv()), y: self.maxPv() },
             { x: self.maxTemp(), y: satPressFromTempIp(tempFromRhAndPv(1, self.maxPv())) },
             { x: self.maxTemp(), y: 0 }
-        ]
+        ];
     });
-
 
     ko.computed(() => {
         d3.select("#boundary-lines").select("path")
             .attr("d", self.saturationLine()(self.boundaryLineData()) + " Z");
     });
-
 
     ko.computed(() => {
         enthalpyBorderPath
@@ -848,11 +839,11 @@ function ViewModel() {
             ).call(boundaryLine);
     });
 
-    self.states = ko.observableArray([new StateTempω(self.maxTemp(), self.maxω(), "State 1")]);
+    self.states = ko.observableArray([new StateTempω(self.maxTemp(), self.maxω(), "State 1", self.totalPressure())]);
 
     self.addState = () => {
         self.states.push(
-            new StateTempω(self.maxTemp(), self.maxω(), "State " + (self.states().length + 1))
+            new StateTempω(self.maxTemp(), self.maxω(), "State " + (self.states().length + 1), self.totalPressure())
         );
     };
 
@@ -897,7 +888,6 @@ function ViewModel() {
         // Once the text has been created we can get the
         // the size of the bounding box to put the background
         // behind.
-
         var boundingBoxes = [];
         d3.select("#state-text").selectAll("text").each(function (d, i) {
             boundingBoxes[i] = this.getBoundingClientRect();
@@ -913,9 +903,8 @@ function ViewModel() {
             .attr("transform", (d, i) => `translate(${rightOffset - Math.round(boundingBoxes[i].width * 0.1 / 2)}, -25)`)
             .attr("width", (d, i) => `${Math.ceil(boundingBoxes[i].width * 1.1)}px`)
             .attr("height", "20px")
-            .attr("fill", "white")
+            .attr("fill", "white");
         selection.exit().remove();
-
 
         selection = d3.select("#state-circles").selectAll("circle").data(self.states());
         selection
@@ -925,11 +914,11 @@ function ViewModel() {
             .attr("r", "5")
             .merge(selection)
             .attr("cx", d => self.xScale()(d.temperature()))
-            .attr("cy", d => self.yScale()(d.pv()))
+            .attr("cy", d => self.yScale()(d.pv()));
         selection.exit().remove();
     });
 
-    var yAxisSelection = svg.append("g").attr("id", "yAxis")
+    var yAxisSelection = svg.append("g").attr("id", "yAxis");
     var pvAxisTemp = self.maxTemp() + 6;
     var middleX = self.xScale()((self.maxTemp() + minTemp) / 2);
 
@@ -947,7 +936,6 @@ function ViewModel() {
         .attr("x", self.xScale()(self.maxTemp() + 4))
         .attr("y", self.yScale()(self.maxPv() / 2));
 
-
     var pvAxisX = self.xScale()(pvAxisTemp + 5);
     var pvAxisY = self.yScale()(self.maxPv() / 2);
     svg.append("text")
@@ -956,7 +944,7 @@ function ViewModel() {
         .attr("y", pvAxisY)
         .attr("transform", `rotate(-90, ${pvAxisX}, ${pvAxisY})`);
 
-    svg.append("text").attr("id", "enthalpy-label").text("Enthalpy / Btu per lb d.a.")
+    svg.append("text").attr("id", "enthalpy-label").text("Enthalpy / Btu per lb d.a.");
 
     ko.computed(() => {
         var rise = self.maxPv() - self.bottomLeftBorderPv();
@@ -970,12 +958,11 @@ function ViewModel() {
             .attr("transform", `rotate(${angle}, ${self.xScale()(50)}, ${self.yScale()(0.4)})`);
     });
 
-
     ko.computed(() => {
         var selection = dewPointLabels.selectAll("text")
             .data(
                 self.constantTemps().filter(temp => temp % 5 === 0 && satPressFromTempIp(temp) < self.maxPv())
-            )
+            );
         selection.enter()
             .append("text")
             .text(d => d.toString())
@@ -991,9 +978,8 @@ function ViewModel() {
         return URL.createObjectURL(blob);
     });
 
-    self.savePng = () => saveSvgAsPng(document.getElementById("chartsvg"), "chart.png", { backgroundColor: "white" })
+    self.savePng = () => saveSvgAsPng(document.getElementById("chartsvg"), "chart.png", { backgroundColor: "white" });
 }
 
 var viewModel = new ViewModel();
 ko.applyBindings(viewModel);
-

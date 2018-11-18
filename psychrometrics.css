@@ -22,3 +22,21 @@
     padding-top: 0.5em;
     padding-bottom: 0.5em;
 }
+
+.base-chart-options {
+    margin-top: 15px;
+    margin-bottom: 15px;
+}
+
+input {
+    padding: 5px;
+}
+
+.base-chart-options  input {
+    margin-right: 10px;
+}
+
+.base-chart-options > div {
+    margin-bottom: 5px;
+}
+
