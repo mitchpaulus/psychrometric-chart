@@ -23,9 +23,23 @@
     padding-bottom: 0.5em;
 }
 
+.state {
+    padding: 10px;
+    border-bottom-style: solid;
+    border-bottom-color: gray;
+}
+
+.remove-button {
+    padding-top: 5px;
+}
+
 .base-chart-options {
+    padding: 10px;
     margin-top: 15px;
     margin-bottom: 15px;
+    margin-right: 5px;
+    border-style: solid;
+    border-color: gray;
 }
 
 input {
@@ -40,3 +54,7 @@ input {
     margin-bottom: 5px;
 }
 
+.download-buttons {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}

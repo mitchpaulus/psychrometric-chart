@@ -119,6 +119,42 @@ function tempPvFromvRh(v, rh, totalPressure) {
     return { temp: testTemp, pv: pvFromTempRh(testTemp, rh) };
 }
 
+function WetBulbRh(wetBulb, rh, totalP) {
+    if (rh < 0 || rh > 1) {
+        throw new Error("RH expected to be between 0 and 1");
+    }
+
+    function funcToZero(testTemp) {
+        ω1 = ωFromWetbulbDryBulb(wetBulb, testTemp, totalP);
+        pv2 = rh * satPressFromTempIp(testTemp);
+        ω2 = wFromPv(pv2, totalP);
+        return ω1 - ω2;
+    }
+
+    var updatedMaxTemp = 200;
+    var updatedMinTemp = 0;
+    var looping = true;
+
+    while (looping) {
+        var testTemp = (updatedMaxTemp + updatedMinTemp) / 2;
+
+        var result = funcToZero(testTemp);
+
+        if (Math.abs(result) < 0.00001) {
+            looping = false;
+        }
+        else {
+            // Too low case
+            if (result > 0) {
+                updatedMinTemp = testTemp;
+            }
+            else { updatedMaxTemp = testTemp; }
+        }
+    }
+
+    return { temp: testTemp, pv: pvFromTempRh(testTemp, rh) }
+}
+
 function wetBulbFromTempω(temp, ω, totalPressure) {
     // Function we'd like to 0. A difference in ω's.
     function testWetbulbResult(testWetbulb) {
@@ -288,6 +324,8 @@ function StateTempω(maxTemp, maxω, name, totalPressure) {
 
 function ViewModel() {
     var self = this;
+    // Start by creating svg elements in the order that I want
+    // them layered. The later items will be on top of the earlier items.
     var vPaths = svg.append("g").attr("id", "vpaths");
     svg.append("g").attr("id", "specific-humidity-lines");
     svg.append("g").attr("id", "x-axis");
@@ -313,6 +351,7 @@ function ViewModel() {
     svg.append("g").attr("id", "v-label-backgrounds");
     svg.append("g").attr("id", "v-labels");
 
+    svg.append("g").attr("id", "wetbulb-labels-backgrounds");
     svg.append("g").attr("id", "wetbulb-labels");
 
     svg.append("g").attr("id", "states");
@@ -327,11 +366,11 @@ function ViewModel() {
         return 120;
     });
 
-    self.totalPressureInput = ko.observable("14.696").extend({ rateLimit: 500 });
+    self.totalPressureInput = ko.observable("14.7").extend({ rateLimit: 500 });
     self.totalPressure = ko.pureComputed(() => {
         var parsedValue = parseFloat(self.totalPressureInput());
         if (!isNaN(parsedValue) && parsedValue > 10 && parsedValue < 20) return parsedValue;
-        return 14.696;
+        return 14.7;
     });
 
     self.maxωInput = ko.observable("0.03").extend({ rateLimit: 500 });
@@ -615,16 +654,6 @@ function ViewModel() {
             .attr("y", d => self.yScale()(d.labelLocation.pv))
             .attr("transform", "translate(-12, -12)");
         selection.exit().remove();
-
-        //selection = d3.select("#v-labels").selectAll("circle").data(data);
-        //selection.enter()
-        //.append("circle")
-        //.style("fill", "red")
-        //.attr("r", "2")
-        //.merge(selection)
-        //.attr("cx", d => self.xScale()(d.labelLocation.temp))
-        //.attr("cy", d => self.yScale()(d.labelLocation.pv))
-        //selection.exit().remove();
     });
 
     function tempAtStraightEnthalpyLine(enthalpy) {
@@ -639,7 +668,7 @@ function ViewModel() {
             return straightLinePv(temp) - pvFromEnthalpyTemp(enthalpy, temp, self.totalPressure());
         }
 
-        // This comes from maxima, a computer algebra system.
+        // This comes from maxima, a computer algebra system, see corresponding maxima file.
         function derivative(temp) {
             return (rise / run) - ((1807179 * (12000000 * temp - 50000000 * enthalpy) * self.totalPressure()) /
               Math.pow(1807179 * temp + 50000000 * enthalpy + 32994182250, 2) -
@@ -655,11 +684,11 @@ function ViewModel() {
     }
 
     self.minEnthalpy = ko.pureComputed(() => enthalpyFromTempPv(minTemp, 0, self.totalPressure()));
-    self.maxEnthalpy = ko.computed(() => {
+    self.maxEnthalpy = ko.pureComputed(() => {
         return enthalpyFromTempPv(self.maxTemp(), self.maxPv(), self.totalPressure());
     });
 
-    self.constEnthalpyValues = ko.computed(() => {
+    self.constEnthalpyValues = ko.pureComputed(() => {
         return range(Math.ceil(self.minEnthalpy()), Math.floor(self.maxEnthalpy()), 0.2);
     });
 
@@ -688,6 +717,7 @@ function ViewModel() {
 
     self.constEnthalpyLines = ko.computed(() => self.constEnthalpyValues().map(self.enthalpyValueToLine));
 
+    // Draw enthalpy items.
     ko.computed(() => {
         var selection = enthalpyPaths.selectAll("path").data(self.constEnthalpyLines().filter(d => d.coords));
         selection.enter()
@@ -731,9 +761,15 @@ function ViewModel() {
     self.wetBulbBottomRight = ko.computed(() => wetBulbFromTempω(self.maxTemp(), 0, self.totalPressure()));
     self.wetBulbValues = ko.computed(() => range(Math.ceil(minWetBulb), Math.floor(self.maxWetBulb()), 1));
 
+    var wetBulbLabelRh = 0.55; // RH value to put all the wetbulb labels.
     self.wetBulbLines = ko.computed(() => {
         return self.wetBulbValues().map((wetbulbTemp) => {
-            var mapFunction = temp => { return { y: pvFromw(ωFromWetbulbDryBulb(wetbulbTemp, temp, self.totalPressure()), self.totalPressure()), x: temp }; };
+            var mapFunction = temp => {
+                return {
+                    y: pvFromw(ωFromWetbulbDryBulb(wetbulbTemp, temp, self.totalPressure()), self.totalPressure()),
+                    x: temp
+                };
+            };
 
             var lowerTemp;
             var upperTemp;
@@ -751,14 +787,18 @@ function ViewModel() {
                 upperTemp = self.maxTemp();
             }
 
+
             var data = range(lowerTemp, upperTemp, 3).map(mapFunction);
-            var midtemp = (upperTemp + lowerTemp) / 2;
-            var midpv = mapFunction(midtemp).y;
+            var labelState = WetBulbRh(wetbulbTemp, wetBulbLabelRh, self.totalPressure());
+            var midtemp = labelState.temp;
+            var midpv = labelState.pv;
+
 
             return { wetbulbTemp: wetbulbTemp, data: data, midtemp: midtemp, midpv: midpv };
         });
     });
 
+    // Drawing wet-bulb items.
     ko.computed(() => {
         var selection = wetBulbPaths.selectAll("path").data(self.wetBulbLines());
         selection.enter().append("path")
@@ -770,16 +810,28 @@ function ViewModel() {
             .attr("d", d => self.saturationLine()(d.data));
         selection.exit().remove();
 
-        var data = self.wetBulbLines().filter(d => d.wetbulbTemp % 5 === 0);
+        var data = self.wetBulbLines().filter(d => d.wetbulbTemp % 5 === 0 && d.midtemp > minTemp && d.midtemp < self.maxTemp());
         selection = d3.select("#wetbulb-labels").selectAll("text").data(data);
         selection.enter()
             .append("text")
             .attr("class", "ticks")
-            .style("font-size", "8px")
+            //.style("font-size", "8px")
             .text(d => d.wetbulbTemp.toFixed(0))
             .merge(selection)
             .attr("x", d => self.xScale()(d.midtemp))
             .attr("y", d => self.yScale()(d.midpv));
+        selection.exit().remove();
+
+        selection = d3.select("#wetbulb-labels-backgrounds").selectAll("rect").data(data);
+        selection.enter()
+            .append("rect")
+            .attr("fill", "white")
+            .attr("width", "25px")
+            .attr("height", "15px")
+            .merge(selection)
+            .attr("x", d => self.xScale()(d.midtemp))
+            .attr("y", d => self.yScale()(d.midpv))
+            .attr("transform", "translate(-12, -12)");
         selection.exit().remove();
     });
 
@@ -825,10 +877,10 @@ function ViewModel() {
 
     var elementObservables = [
         { obs: "showEnthalpyLines", ids: ["enthalpyLines"] },
-        { obs: "showvLines", ids: ["vpaths"] },
+        { obs: "showvLines", ids: ["vpaths",  "v-label-backgrounds", "v-labels"] },
         { obs: "showω", ids: ["specific-humidity-lines"] },
         { obs: "showTemp", ids: ["temp-lines"] },
-        { obs: "showWetBulb", ids: ["wetbulb-lines", "wetbulb-labels"] },
+        { obs: "showWetBulb", ids: ["wetbulb-lines", "wetbulb-labels",  "wetbulb-labels-backgrounds"] },
         { obs: "showRh", ids: ["rh-lines", "rh-ticks", "rh-label-background"] }
     ];
 
@@ -902,11 +954,13 @@ function ViewModel() {
         .attr("transform", "translate(" + self.xScale()(pvAxisTemp) + ",0)")
         .call(self.yAxis());
 
+    // X-axis label
     svg.append("text")
         .text("Dry bulb temperature / °F")
         .attr("x", middleX)
         .attr("y", self.yScale()(-0.05));
 
+    // ω label
     svg.append("text")
         .text("ω")
         .attr("x", self.xScale()(self.maxTemp() + 4))

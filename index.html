@@ -11,58 +11,53 @@
 
         <div style="display: grid; grid-template-columns: 1400px 1fr ">
             <div id="vizcontainer" style="grid-column: 1 / 2">
-                <svg id="chartsvg" style="border:1px lightgray solid;" />
+                <svg id="chartsvg" style="border:1px lightgray solid;"></svg>
+                <div class="download-buttons"> <button data-bind="click: savePng">Download PNG</button> </div>
             </div>
 
-            <div style="grid-column: 2 /3"  >
-                <div>
+            <div style="grid-column: 2 / 3">
+                <div class="base-chart-options">
                     <div><label><input type="checkbox" data-bind="checked: showEnthalpyLines">Show enthalpy lines? </label></div>
                     <div><label><input type="checkbox" data-bind="checked: showvLines">Show specific volume lines? </label></div>
                     <div><label><input type="checkbox" data-bind="checked: showω">Show ω lines? </label></div>
                     <div><label><input type="checkbox" data-bind="checked: showTemp">Show dry bulb lines? </label></div>
                     <div><label><input type="checkbox" data-bind="checked: showWetBulb">Show wet bulb lines? </label></div>
-                    <div><label><input type="checkbox" data-bind="checked: showRh">Show Rh lines? </label></div>
+                    <div><label><input type="checkbox" data-bind="checked: showRh">Show RH lines? </label></div>
 
-                    <div class="base-chart-options">
-                        <div><label><input type="number" data-bind="textInput: maxTempInput">Max dry bulb temp / °F</label></div>
-                        <div><label><input type="number" step="0.001" data-bind="textInput: maxωInput">Max ω</label></div>
-                        <div><label><input type="number" step="0.1" data-bind="textInput: totalPressureInput">Total Pressure / psia</label></div>
+                    <div style="margin-top: 10px">
+                        <div><label>Max dry bulb temp / °F<input type="number" data-bind="textInput: maxTempInput"></label></div>
+                        <div><label>Max ω<input type="number" step="0.001" data-bind="textInput: maxωInput"></label></div>
+                        <div><label>Total Pressure / psia<input type="number" step="0.1" data-bind="textInput: totalPressureInput"></label></div>
                     </div>
 
                 </div>
                 <div class="states" data-bind="foreach: states">
-                    <div>
-                        <label><span class="state-label"> Dry Bulb Temperature / °F </span><input data-bind="textInput: temperature" type="number"></label>
-                    </div> 
-                    <div style="margin-bottom:10px">
-                        <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: humidityRatio" type="number" step="0.001"></label>
-                    </div>
-                    <div>
-                        <label><span class="state-label">State Label</span><input data-bind="textInput: name" type="text"></label>
-                    </div>
-                    <div>
-                        <button data-bind="click: $root.removeState">Remove State</button>
+                    <div class="state">
+                        <div>
+                            <label><span class="state-label"> Dry Bulb Temperature / °F </span><input data-bind="textInput: temperature" type="number"></label>
+                        </div>
+                        <div style="margin-bottom:10px">
+                            <label><span class="state-label"> Humidity Ratio </span><input data-bind="textInput: humidityRatio" type="number" step="0.001"></label>
+                        </div>
+                        <div>
+                            <label><span class="state-label">State Label</span><input data-bind="textInput: name" type="text"></label>
+                        </div>
+                        <div class="remove-button">
+                            <button data-bind="click: $root.removeState">Remove State</button>
+                        </div>
                     </div>
                 </div>
                 <div>
                     <button data-bind="click: addState">Add new state</button>
                 </div>
-
-
             </div>
-                <div>
-                    <a download="psy.svg" data-bind="attr: { href: blobUrl }">Download File</a>
-                </div>
-                <div>
-                    <a data-bind="click: savePng">Download PNG</a>
-                </div>
         </div>
+        <!--<div class="download-buttons"> <a download="psy.svg" data-bind="attr: { href: blobUrl }">Download File</a> </div>-->
 
         <script src="https://d3js.org/d3.v4.min.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/1.4.1/jspdf.debug.js" integrity="sha384-THVO/sM0mFD9h7dfSndI6TS0PgAGavwKvB5hAxRRvc0o9cPLohB0wb/PTA7LdUHs" crossorigin="anonymous"></script>
         <script src="savepng.js"></script>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.4.2/knockout-min.js"></script>
-        <script src='https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/MathJax.js?config=TeX-MML-AM_CHTML' async></script>
         <script src="psychrometrics.js"></script>
     </body>
 </html>
