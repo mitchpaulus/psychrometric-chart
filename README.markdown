@@ -9,10 +9,16 @@ Goals of this psychrometric chart:
 - Just static HTML, JavaScript, and CSS, no need to have an internet
   connection, just a web browser.
 
-
 ## Technologies used
 
 * Chart is created using [d3.js](https://d3js.org/)
 * Front-end framework: [knockout.js](https://knockoutjs.com)
 * [SaveSvgAsPng](https://github.com/exupero/saveSvgAsPng)
 * Nothing else!
+
+## Still to do:
+
+- [ ] Show other calculated psychrometric properties for states.
+- [ ] Use other properties besides humidity ratio for fixing states.
+- [ ] User-defined color schemes.
+
