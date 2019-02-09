@@ -7,5 +7,8 @@ func3: solve(func1, v);
 display2d:false;
 diff(func3, temp);
 
+func4: w = 0.621945 * pv / (totalPressure - pv);
+func5:solve(func4, pv)[1]$
 
+diff(func5, w);
 

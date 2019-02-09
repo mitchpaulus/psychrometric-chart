@@ -10,6 +10,8 @@ const c13 = 6.5459673;
 
 const minTemp = 32;
 
+const Rda = 53.35; // Dry air gas constant, ft-lbf / lbda-R
+
 function getRandomInt(min, max) {
     min = Math.ceil(min);
     max = Math.floor(max);
@@ -95,6 +97,7 @@ function tempFromEnthalpyPv(h, pv, totalPressure) {
     return (h - ω * 1061) / (0.24 + ω * 0.445);
 }
 
+// Returns object with temperature (°F) and vapor pressure (psia)
 function tempPvFromvRh(v, rh, totalPressure) {
     var rAir = 53.35; // Gas constant in units of ft-lbf / lbm - R
 
@@ -216,7 +219,7 @@ function ωFromTempv(temp, v, totalPressure) {
     return numerator / 1.607858;
 }
 
-// Calculate derivative of pv vs. T
+// Calculate derivative of pv vs. T at given rh (0-1) and temp (°F)
 function dPvdT(rh, temp) {
     if (rh < 0 || rh > 1) throw Error("rh should be specified 0-1");
     var absTemp = temp + 459.67;
@@ -301,10 +304,6 @@ function isMult(val, mult) {
     return val % mult === 0;
 }
 
-var dewPointLabels = svg
-    .append("g")
-    .attr("id", "dewpointlabels")
-    .attr("class", "ticks");
 
 var constantRHvalues = [];
 for (let i = 10; i < 100; i = i + 10) {
@@ -358,6 +357,7 @@ function ViewModel() {
     svg.append("g").attr("id", "state-circles");
     svg.append("g").attr("id", "state-backgrounds");
     svg.append("g").attr("id", "state-text");
+    svg.append("g").attr("id", "dewpointlabels");
 
     self.maxTempInput = ko.observable("120").extend({ rateLimit: 500 });
     self.maxTemp = ko.computed(() => {
@@ -392,9 +392,12 @@ function ViewModel() {
     self.pixelsPerTemp = ko.pureComputed(() => self.xScale()(1) - self.xScale()(0));
     self.pixelsPerPsia = ko.pureComputed(() => self.yScale()(1) - self.yScale()(0));
 
-    self.maxPv = ko.pureComputed(() => {
-        return pvFromw(self.maxω(), self.totalPressure());
-    });
+    // Return angle in °, given slope in units of psi / °F
+    angleFromDerivative = derivative =>
+                (Math.atan(derivative * self.pixelsPerPsia() / (self.pixelsPerTemp())
+                ) * 180) / Math.PI;
+
+    self.maxPv = ko.pureComputed(() => pvFromw(self.maxω(), self.totalPressure()) );
 
     self.yScale = ko.pureComputed(() => {
         return d3
@@ -534,10 +537,7 @@ function ViewModel() {
             //// Get derivative in psia/°F
             var derivative = dPvdT(rhValue / 100, temp);
             //// Need to get in same units, pixel/pixel
-            var rotationDegrees =
-                (Math.atan(
-                    (derivative * self.pixelsPerPsia()) / (self.pixelsPerTemp())
-                ) * 180) / Math.PI;
+            var rotationDegrees = angleFromDerivative(derivative);
 
             return {
                 rh: rhValue,
@@ -565,9 +565,10 @@ function ViewModel() {
         selection.exit().remove();
 
         var height = 12;
-        selection = d3.select("#rh-label-background").selectAll("rect");
+        var labelData = self.constRHLines().filter(d => d.pv < self.maxPv());
+        selection = d3.select("#rh-label-background").selectAll("rect").data(labelData);
         selection
-            .data(self.constRHLines()).enter()
+            .enter()
             .append("rect")
             .attr("width", 25)
             .attr("height", height)
@@ -576,8 +577,9 @@ function ViewModel() {
             .attr("x", d => self.xScale()(d.temp))
             .attr("y", d => self.yScale()(d.pv))
             .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(-2 -${height + 2})`);
+        selection.exit().remove();
 
-        selection = rhticks.selectAll("text").data(self.constRHLines());
+        selection = rhticks.selectAll("text").data(labelData);
         selection.enter()
             .append("text")
             .attr("class", "rh-ticks")
@@ -586,6 +588,7 @@ function ViewModel() {
             .attr("x", d => d.x)
             .attr("y", d => d.y)
             .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(0 -3)`);
+        selection.exit().remove();
     });
 
     var minv = vFromTempω(minTemp, 0, self.totalPressure());
@@ -594,15 +597,19 @@ function ViewModel() {
     self.vValues = ko.computed(() => range(Math.ceil(minv / 0.1) * 0.1, Math.floor(self.maxv() / 0.1) * 0.1, 0.1));
 
     self.vLines = ko.computed(() => {
+
+        var firstVCutoff = vFromTempω(minTemp, satHumidRatioFromTempIp(minTemp, self.totalPressure()), self.totalPressure());
+        var secondVCutoff = vFromTempω(self.tempAtCutoff(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure());
+
         return self.vValues().map(v => {
             var mapFunction = temp => { return { x: temp, y: pvFromw(ωFromTempv(temp, v, self.totalPressure()), self.totalPressure()) }; };
             var lowerTemp;
             var upperTemp;
 
-            if (v < vFromTempω(minTemp, satHumidRatioFromTempIp(minTemp, self.totalPressure()), self.totalPressure())) {
+            if (v < firstVCutoff) {
                 lowerTemp = minTemp;
                 upperTemp = tempFromvω(v, 0, self.totalPressure());
-            } else if (v < vFromTempω(self.tempAtCutoff(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure())) {
+            } else if (v < secondVCutoff) {
                 lowerTemp = tempPvFromvRh(v, 1, self.totalPressure()).temp;
                 upperTemp = Math.min(tempFromvω(v, 0, self.totalPressure()), self.maxTemp());
             } else {
@@ -610,9 +617,21 @@ function ViewModel() {
                 upperTemp = Math.min(tempFromvω(v, 0, self.totalPressure()), self.maxTemp());
             }
 
-            var data = range(lowerTemp, upperTemp, 2).map(mapFunction);
+            var data = [lowerTemp, upperTemp].map(mapFunction);
             var labelLocation = tempPvFromvRh(v, 0.35, self.totalPressure());
-            return { v: v, data: data, labelLocation: labelLocation };
+
+            // 144 to go from psf to psi.
+            var derivative = -Rda / v / 144;
+            var rotationDegrees = angleFromDerivative(derivative);
+
+            return {
+                v: v,
+                data: data,
+                labelLocation: labelLocation,
+                rotationDegrees: rotationDegrees,
+                x: self.xScale()(labelLocation.temp),
+                y: self.yScale()(labelLocation.pv)
+            };
         });
     });
 
@@ -639,8 +658,9 @@ function ViewModel() {
             .attr("text-anchor", "middle")
             .text(d => d.v.toFixed(1))
             .merge(selection)
-            .attr("x", d => self.xScale()(d.labelLocation.temp))
-            .attr("y", d => self.yScale()(d.labelLocation.pv));
+            .attr("x", d => d.x)
+            .attr("y", d => d.y)
+            .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(0 -5)`);
         selection.exit().remove();
 
         selection = d3.select("#v-label-backgrounds").selectAll("rect").data(data);
@@ -652,7 +672,7 @@ function ViewModel() {
             .merge(selection)
             .attr("x", d => self.xScale()(d.labelLocation.temp))
             .attr("y", d => self.yScale()(d.labelLocation.pv))
-            .attr("transform", "translate(-12, -12)");
+            .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(0 -5) translate(-12 -12)`);
         selection.exit().remove();
     });
 
@@ -763,6 +783,27 @@ function ViewModel() {
 
     var wetBulbLabelRh = 0.55; // RH value to put all the wetbulb labels.
     self.wetBulbLines = ko.computed(() => {
+
+        // This is the derivative of Pv vs. temperature for a given
+        // constant wet-bulb line.
+        derivative = (temp, wetbulb) => {
+            var wsatwetbulb = satHumidRatioFromTempIp(wetbulb, self.totalPressure())
+
+            var high = (1093 - 0.556*wetbulb) * wsatwetbulb - 0.24 * (temp - wetbulb);
+            var low = 1093 + 0.444 * temp - wetbulb;
+
+            var dHigh = -0.24;
+            var dLow = 0.444;
+
+            var dwdT = ((low * dHigh) - (high * dLow)) / (low * low);
+
+            var w = ωFromWetbulbDryBulb(wetbulb, temp, self.totalPressure());
+
+            var dpvdw = (200000*self.totalPressure())/(200000*w+124389)-(40000000000*self.totalPressure()*w)/Math.pow(200000*w+124389,2);
+
+            return dpvdw * dwdT;
+        }
+
         return self.wetBulbValues().map((wetbulbTemp) => {
             var mapFunction = temp => {
                 return {
@@ -787,14 +828,21 @@ function ViewModel() {
                 upperTemp = self.maxTemp();
             }
 
-
             var data = range(lowerTemp, upperTemp, 3).map(mapFunction);
             var labelState = WetBulbRh(wetbulbTemp, wetBulbLabelRh, self.totalPressure());
             var midtemp = labelState.temp;
+            var rotationAngle = angleFromDerivative(derivative(midtemp, wetbulbTemp));
             var midpv = labelState.pv;
 
-
-            return { wetbulbTemp: wetbulbTemp, data: data, midtemp: midtemp, midpv: midpv };
+            return {
+                wetbulbTemp: wetbulbTemp,
+                data: data,
+                midtemp: midtemp,
+                midpv: midpv,
+                x: self.xScale()(midtemp),
+                y: self.yScale()(midpv),
+                rotationAngle: rotationAngle
+            };
         });
     });
 
@@ -810,28 +858,30 @@ function ViewModel() {
             .attr("d", d => self.saturationLine()(d.data));
         selection.exit().remove();
 
-        var data = self.wetBulbLines().filter(d => d.wetbulbTemp % 5 === 0 && d.midtemp > minTemp && d.midtemp < self.maxTemp());
+        var data = self.wetBulbLines().filter(d => d.wetbulbTemp % 5 === 0 && d.midtemp > minTemp && d.midtemp < self.maxTemp() && d.midpv < self.maxPv());
         selection = d3.select("#wetbulb-labels").selectAll("text").data(data);
         selection.enter()
             .append("text")
             .attr("class", "ticks")
-            //.style("font-size", "8px")
+            .style("font-size", "8px")
             .text(d => d.wetbulbTemp.toFixed(0))
             .merge(selection)
             .attr("x", d => self.xScale()(d.midtemp))
-            .attr("y", d => self.yScale()(d.midpv));
+            .attr("y", d => self.yScale()(d.midpv))
+            .attr("transform", d => `rotate(${d.rotationAngle}, ${d.x}, ${d.y}) translate(0 -3)`);
+
         selection.exit().remove();
 
         selection = d3.select("#wetbulb-labels-backgrounds").selectAll("rect").data(data);
         selection.enter()
             .append("rect")
             .attr("fill", "white")
-            .attr("width", "25px")
-            .attr("height", "15px")
+            .attr("width", "14px")
+            .attr("height", "10px")
             .merge(selection)
             .attr("x", d => self.xScale()(d.midtemp))
             .attr("y", d => self.yScale()(d.midpv))
-            .attr("transform", "translate(-12, -12)");
+            .attr("transform", d => `rotate(${d.rotationAngle}, ${d.x}, ${d.y}) translate(0 -3) translate(-2 -8)`);
         selection.exit().remove();
     });
 
@@ -974,6 +1024,7 @@ function ViewModel() {
         .attr("y", pvAxisY)
         .attr("transform", `rotate(-90, ${pvAxisX}, ${pvAxisY})`);
 
+    // Main enthalpy axis label
     svg.append("text").attr("id", "enthalpy-label").text("Enthalpy / Btu per lb d.a.");
 
     ko.computed(() => {
@@ -982,24 +1033,32 @@ function ViewModel() {
 
         var angle = Math.atan((rise * self.pixelsPerPsia()) / (run * self.pixelsPerTemp())) * 180 / Math.PI;
 
+        var basex = (self.upperLeftBorderTemp() + minTemp) / 2;
+        var basey = (self.maxPv() + self.bottomLeftBorderPv()) / 2;
+
+        var absBasex = self.xScale()(basex)
+        var absBasey = self.yScale()(basey)
+
+
         d3.select("#enthalpy-label")
-            .attr("x", self.xScale()(50))
-            .attr("y", self.yScale()(0.4))
-            .attr("transform", `rotate(${angle}, ${self.xScale()(50)}, ${self.yScale()(0.4)})`);
+            .attr("x", absBasex)
+            .attr("y", absBasey)
+            .attr("transform", `rotate(${angle}, ${absBasex}, ${absBasey}) translate(-100 -40)`);
     });
 
     ko.computed(() => {
-        var selection = dewPointLabels.selectAll("text")
+        var selection = d3.select("#dewpointlabels").selectAll("text")
             .data(
                 self.constantTemps().filter(temp => temp % 5 === 0 && satPressFromTempIp(temp) < self.maxPv())
             );
         selection.enter()
             .append("text")
             .text(d => d.toString())
-            .attr("dx", "-0.5em")
+            .attr("dx", "-13")
+            .attr("font-size", "10px")
             .merge(selection)
             .attr("x", d => self.xScale()(d))
-            .attr("y", d => self.yScale()(satPressFromTempIp(d) + 0.01));
+            .attr("y", d => self.yScale()(satPressFromTempIp(d) + 0.003));
         selection.exit().remove();
     });
 
