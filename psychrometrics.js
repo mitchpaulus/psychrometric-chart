@@ -591,10 +591,10 @@ function ViewModel() {
         selection.exit().remove();
     });
 
-    var minv = vFromTempω(minTemp, 0, self.totalPressure());
+    self.minv = ko.computed(() => vFromTempω(minTemp, 0, self.totalPressure()));
 
     self.maxv = ko.computed(() => vFromTempω(self.maxTemp(), wFromPv(self.maxPv(), self.totalPressure()), self.totalPressure()));
-    self.vValues = ko.computed(() => range(Math.ceil(minv / 0.1) * 0.1, Math.floor(self.maxv() / 0.1) * 0.1, 0.1));
+    self.vValues = ko.computed(() => range(Math.ceil(self.minv() / 0.1) * 0.1, Math.floor(self.maxv() / 0.1) * 0.1, 0.1));
 
     self.vLines = ko.computed(() => {
 
@@ -625,7 +625,7 @@ function ViewModel() {
             var rotationDegrees = angleFromDerivative(derivative);
 
             return {
-                v: v,
+                v: Math.round(v * 10) / 10, // properly round to 1 decimal place, because Javascript.
                 data: data,
                 labelLocation: labelLocation,
                 rotationDegrees: rotationDegrees,
