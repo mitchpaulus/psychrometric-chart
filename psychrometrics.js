@@ -656,8 +656,8 @@ function ViewModel() {
             .append("text")
             .attr("class", "ticks")
             .attr("text-anchor", "middle")
-            .text(d => d.v.toFixed(1))
             .merge(selection)
+            .text(d => d.v.toFixed(1))
             .attr("x", d => d.x)
             .attr("y", d => d.y)
             .attr("transform", d => `rotate(${d.rotationDegrees}, ${d.x}, ${d.y}) translate(0 -5)`);
