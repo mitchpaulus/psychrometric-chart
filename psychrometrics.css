@@ -44,6 +44,7 @@
 
 input {
     padding: 5px;
+    cursor: inherit;
 }
 
 .base-chart-options  input {
@@ -62,3 +63,20 @@ input {
 .input-options {
     margin-top: 10px;
 }
+
+label {
+    cursor: inherit;
+}
+
+.checkbox-option {
+    cursor: pointer;
+}
+
+.checkbox-option:hover {
+    background: lightgray;
+    user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-select: none;
+}
+
