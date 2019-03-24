@@ -22,6 +22,16 @@ function getRandomArbitrary(min, max) {
     return Math.random() * (max - min) + min;
 }
 
+function newtonRaphson(zeroFunc, derivativeFunc, initialX, tolerance) {
+    if (typeof tolerance === "undefined") tolerance = 0.0001;
+
+    var testX = initialX;
+    while(Math.abs(zeroFunc(testX)) > tolerance) {
+        testX = testX - zeroFunc(testX) / derivativeFunc(testX);
+    }
+    return testX;
+}
+
 // Utility method that guarantees that min and max are exactly
 // as input, with the step size based on 0.
 function range(min, max, stepsize) {
@@ -85,11 +95,8 @@ function tempFromRhAndPv(rh, pv) {
         return satPressFromTempIp(temp) - goalPsat;
     }
 
-    var testTemp = 80;
-    while (Math.abs(funcToZero(testTemp)) > 0.00001) {
-        testTemp = testTemp - funcToZero(testTemp) / dPvdT(1, testTemp);
-    }
-    return testTemp;
+    var derivativeFunc = (temp) => dPvdT(1, temp);
+    return newtonRaphson(funcToZero, derivativeFunc, 80, 0.00001)
 }
 
 function tempFromEnthalpyPv(h, pv, totalPressure) {
@@ -113,12 +120,7 @@ function tempPvFromvRh(v, rh, totalPressure) {
     }
 
     // Employ the Newton-Raphson method.
-    var testTemp = 80;
-    var error = 1;
-    while (error > 0.00001) {
-        testTemp = testTemp - funcToZero(testTemp) / derivative(testTemp);
-        error = Math.abs(funcToZero(testTemp));
-    }
+    testTemp = newtonRaphson(funcToZero, derivative, 80);
     return { temp: testTemp, pv: pvFromTempRh(testTemp, rh) };
 }
 
@@ -158,6 +160,9 @@ function WetBulbRh(wetBulb, rh, totalP) {
     return { temp: testTemp, pv: pvFromTempRh(testTemp, rh) }
 }
 
+// temp: Dry bulb temperature in °F
+// ω: Humidity ratio
+// totalPressure: Total Pressure in psia.
 function wetBulbFromTempω(temp, ω, totalPressure) {
     // Function we'd like to 0. A difference in ω's.
     function testWetbulbResult(testWetbulb) {
@@ -219,7 +224,7 @@ function ωFromTempv(temp, v, totalPressure) {
     return numerator / 1.607858;
 }
 
-// Calculate derivative of pv vs. T at given rh (0-1) and temp (°F)
+// Calculate derivative of pv vs. T at given RH (0-1) and temp (°F)
 function dPvdT(rh, temp) {
     if (rh < 0 || rh > 1) throw Error("rh should be specified 0-1");
     var absTemp = temp + 459.67;
@@ -256,7 +261,6 @@ var svg = d3.select("svg");
 svg.style("width", pixelWidth + "px");
 svg.style("height", pixelHeight + "px");
 
-var humidityStep = 0.002;
 
 function humidityRatioFromEnthalpyTemp(enthalpy, temp) {
     return (enthalpy - 0.24 * temp) / (1061 + 0.445 * temp);
@@ -300,15 +304,9 @@ function satTempAtEnthalpy(enthalpy, totalPressure) {
     return testTemp;
 }
 
-function isMult(val, mult) {
-    return val % mult === 0;
-}
+function isMult(val, mult) { return val % mult === 0; }
 
-
-var constantRHvalues = [];
-for (let i = 10; i < 100; i = i + 10) {
-    constantRHvalues.push(i);
-}
+var constantRHvalues = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
 function StateTempω(maxTemp, maxω, name, totalPressure) {
     var self = this;
@@ -452,6 +450,7 @@ function ViewModel() {
     });
 
     self.constantHumidities = ko.computed(() => {
+        var humidityStep = 0.002;
         var constantHumidities = [];
         for (let i = humidityStep; i < wFromPv(self.maxPv(), self.totalPressure()); i = i + humidityStep) {
             constantHumidities.push(i);
@@ -696,11 +695,7 @@ function ViewModel() {
                                                      32994182250));
         }
 
-        var testTemp = 80;
-        while (Math.abs(funcToZero(testTemp)) > 0.0001) {
-            testTemp = testTemp - funcToZero(testTemp) / derivative(testTemp);
-        }
-        return testTemp;
+        return newtonRaphson(funcToZero, derivative, 80);
     }
 
     self.minEnthalpy = ko.pureComputed(() => enthalpyFromTempPv(minTemp, 0, self.totalPressure()));
