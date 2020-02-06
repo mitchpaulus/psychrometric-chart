@@ -2,6 +2,7 @@
 
 Goals of this psychrometric chart:
 
+- A new goal
 - Open source and accessible online.
 - Dynamic and adjustable parameters for chart construction.
 - High-quality visualization and exports (SVG and PNG).
